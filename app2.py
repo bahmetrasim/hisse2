@@ -5,7 +5,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # --- WEB SAYFASI AYARLARI ---
-st.set_page_config(page_title="Yatırım Anayasası v5", layout="centered")
+st.set_page_config(page_title="Yatırım Anayasası v5.1", layout="centered")
 st.title("Yatırım Anayasası - Altın Oran Tarayıcı")
 st.markdown("**Duygulara yer yok. Sadece matematik ve kurallar.**")
 st.markdown("S&P 500, Nasdaq 100 ve **S&P MidCap 400** endekslerindeki ~900 kaliteli hisse taranıyor...")
@@ -43,12 +43,12 @@ def endeks_hisselerini_getir():
         nasdaq_table = pd.read_html(nasdaq_url, flavor='bs4')[4]
         nasdaq_tickers = nasdaq_table['Ticker'].tolist()
         
-        # 3. S&P MidCap 400 Listesi (Tam Yatırım Anayasasına Uygun Orta Ölçekli Şirketler)
+        # 3. S&P MidCap 400 Listesi (Orta Ölçekli Şirketler)
         sp400_url = "https://en.wikipedia.org/wiki/List_of_S%26P_400_companies"
         sp400_table = pd.read_html(sp400_url, flavor='bs4')[0]
         sp400_tickers = sp400_table['Symbol'].tolist()
         
-        # Hepsini birleştir ve aynı olanları (mükerrer) çıkar
+        # Hepsini birleştir ve aynı olanları çıkar
         tum_hisseler = list(set(sp500_tickers + nasdaq_tickers + sp400_tickers))
         temiz_hisseler = [t.replace('.', '-') for t in tum_hisseler if isinstance(t, str)]
         
@@ -59,9 +59,14 @@ def endeks_hisselerini_getir():
 hisse_havuzu = endeks_hisselerini_getir()
 st.info(f"Aktif Havuz: S&P 500 + Nasdaq 100 + S&P 400 ({len(hisse_havuzu)} Benzersiz Hisse)")
 
-# --- 2. ADIM: TARAMA MEKANİZMASI ---
+# --- 2. ADIM: TARAMA MEKANİZMASI VE RÖNTGEN ---
 if st.button("900 Hisseyi Birden Tara"):
     uygun_hisseler = []
+    
+    # Röntgen (Hata Ayıklama) Sayaçları
+    basarili_veri = 0
+    bos_veri_hatasi = 0
+    hesaplama_hatasi = 0
     
     ilerleme_barı = st.progress(0)
     durum_yazisi = st.empty()
@@ -73,8 +78,14 @@ if st.button("900 Hisseyi Birden Tara"):
         durum_yazisi.text(f"Avlanıyor: {ticker} ({index+1}/{toplam_hisse})")
         
         try:
-            df = yf.download(ticker, period="2mo", progress=False, show_errors=False)
-            if df.empty or len(df) < 25: continue
+            # interval="1d" ekleyerek Yahoo'nun engellemesini zorlaştırıyoruz
+            df = yf.download(ticker, period="2mo", interval="1d", progress=False, show_errors=False)
+            
+            if df.empty or len(df) < 25: 
+                bos_veri_hatasi += 1
+                continue
+                
+            basarili_veri += 1
             
             close = df['Close'].squeeze()
             high = df['High'].squeeze()
@@ -109,14 +120,20 @@ if st.button("900 Hisseyi Birden Tara"):
                     "Dip Stoch": round(float(son_7_gun_stoch.min()), 1)
                 })
         except:
+            hesaplama_hatasi += 1
             continue
             
     durum_yazisi.empty()
     ilerleme_barı.empty()
     st.divider()
     
+    # --- RÖNTGEN RAPORU EKRANI ---
+    st.info(f"**Sistem Raporu:** {basarili_veri} hissenin verisi çekildi. {bos_veri_hatasi} hisse Yahoo tarafından engellendi (veya eksik veri). {hesaplama_hatasi} hissede matematiksel hata oluştu.")
+    
     if uygun_hisseler:
         st.success(f"Dipten Dönüş Yapan {len(uygun_hisseler)} Orta/Büyük Ölçekli Cevher Bulundu!")
         st.dataframe(pd.DataFrame(uygun_hisseler), use_container_width=True)
+    elif basarili_veri > 0:
+        st.warning("Veriler başarıyla tarandı. Anayasa'ya uyan hisse bulunamadı. Disiplini koruyun ve bekleyin.")
     else:
-        st.warning("900 hisse tarandı. Anayasa'ya uyan hisse bulunamadı. Disiplini koruyun ve bekleyin.")
+        st.error("DİKKAT: Hiçbir hissenin verisi çekilemedi! Yahoo Finance sistemi şu an erişimi engelliyor.")
