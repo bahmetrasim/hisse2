@@ -5,11 +5,13 @@ import time
 import warnings
 warnings.filterwarnings("ignore")
 
-st.set_page_config(page_title="Anayasa v11 - Dev Tarayıcı", layout="centered")
-st.title("Yatırım Anayasası v11")
-st.markdown("900+ hisse için tam yetkili tarama modu.")
+st.set_page_config(page_title="Anayasa v12 - Güvenli Dev Tarayıcı", layout="centered")
+st.title("Yatırım Anayasası v12")
+st.markdown("**Güvenlik Modu:** 50'şerli paketler halinde tarama yapılıyor.")
+st.markdown("İşlem süresi yaklaşık 15-20 dakikadır. Lütfen bu sayfayı açık tutun.")
+st.divider()
 
-# Sabit listeniz (Sizin paylaştığınız liste)
+# Sabit listeniz
 FULL_LIST = [
     "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "GOOG", "AVGO", "TSLA", "META", "MU", "LLY", "BRK-B", "AMD", 
     "WMT", "JPM", "INTC", "V", "JNJ", "AMAT", "XOM", "LRCX", "CAT", "CSCO", "MA", "ABBV", "ORCL", 
@@ -39,33 +41,43 @@ FULL_LIST = [
     "SWN", "WLL", "CHK", "QEP", "CNX", "CRK", "BRY", "ESTE", "LPI", "REI", "SM", "XEC"
 ]
 
+def chunker(seq, size):
+    for pos in range(0, len(seq), size):
+        yield seq[pos:pos + size]
+
 if st.button("Taramayı Başlat"):
     uygunlar = []
-    basarili_sayac = 0
-    bar = st.progress(0)
+    st.write(f"Tarama başladı: {len(FULL_LIST)} hisse taranıyor.")
     
-    for i, ticker in enumerate(FULL_LIST):
-        bar.progress(int((i+1)/len(FULL_LIST)*100))
-        try:
-            # Engellenmemek için süre
-            time.sleep(0.5) 
-            df = yf.download(ticker, period="2mo", interval="1d", progress=False, 
-                             threads=False, user_agent='Mozilla/5.0')
-            
-            if len(df) < 25: continue
-            
-            basarili_sayac += 1
-            close = df['Close'].squeeze()
-            ema9 = close.ewm(span=9, adjust=False).mean()
-            ema21 = close.ewm(span=21, adjust=False).mean()
-            
-            if (float(close.iloc[-1]) <= 50) and \
-               (float(ema9.iloc[-2]) <= float(ema21.iloc[-2])) and \
-               (float(ema9.iloc[-1]) > float(ema21.iloc[-1])):
-                
-                uygunlar.append({"Sembol": ticker, "Fiyat": round(float(close.iloc[-1]), 2)})
-        except: continue
+    # 50'şerli paketler
+    paket_sayisi = (len(FULL_LIST) // 50) + 1
+    for i, paket in enumerate(chunker(FULL_LIST, 50)):
+        st.write(f"--- Paket {i+1}/{paket_sayisi} taranıyor ---")
         
-    st.write(f"Tarama bitti. {len(FULL_LIST)} hisse taranıp {basarili_sayac} tanesinden veri alındı.")
+        for ticker in paket:
+            try:
+                # Yahoo engeline karşı her hissede kısa mola
+                time.sleep(0.5) 
+                df = yf.download(ticker, period="2mo", interval="1d", progress=False, 
+                                 threads=False, user_agent='Mozilla/5.0')
+                
+                if len(df) < 25: continue
+                
+                close = df['Close'].squeeze()
+                ema9 = close.ewm(span=9, adjust=False).mean()
+                ema21 = close.ewm(span=21, adjust=False).mean()
+                
+                # Anayasa Filtresi
+                if (float(close.iloc[-1]) <= 50) and \
+                   (float(ema9.iloc[-2]) <= float(ema21.iloc[-2])) and \
+                   (float(ema9.iloc[-1]) > float(ema21.iloc[-1])):
+                    uygunlar.append({"Sembol": ticker, "Fiyat": round(float(close.iloc[-1]), 2)})
+            except: continue
+        
+        # Her 50 hisseden sonra Yahoo dinlensin
+        st.write(f"✅ Paket {i+1} bitti. Güvenlik için 10 saniye mola veriliyor...")
+        time.sleep(10) 
+        
+    st.divider()
     if uygunlar: st.dataframe(pd.DataFrame(uygunlar))
-    else: st.warning("Anayasa'ya uygun hisse yok. Sabır disiplindir.")
+    else: st.warning("Bu dev havuzda şu an Anayasa'ya uyan hisse yok.")
