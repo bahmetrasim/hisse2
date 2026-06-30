@@ -1,0 +1,5 @@
+streamlit
+yfinance
+pandas
+html5lib
+beautifulsoup4
