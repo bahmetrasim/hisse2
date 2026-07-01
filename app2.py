@@ -48,7 +48,10 @@ if st.button("Taramayı Başlat"):
                 
                 # Temel Analiz Verileri
                 pb = info.get('priceToBook', 999)
-                peg = info.get('pegRatio', 999)
+
+                  # PEG verisi yoksa veya None ise, listeye girmesi için 0.5 (ideal değer) ata
+                peg_raw = info.get('pegRatio')
+                peg = peg_raw if peg_raw is not None else 0.5
                 
                 # Teknik Veriler
                 close = df['Close'].squeeze()
